@@ -216,13 +216,13 @@ def _csv_cell(value):
     return "'" + text if text.lstrip().startswith(("=", "+", "-", "@")) else text
 
 
-def router(path, *, collector=collect, cooldown=60):
+def router(path, *, collector=collect, cooldown=60, published=None):
     api = APIRouter(prefix="/api/v1/radar", tags=["project radar"])
     job = RefreshJob(path, collector, cooldown)
 
     def state():
         try:
-            return read_state(path)
+            return published.news() if published else read_state(path)
         except (OSError, ValueError, FetchError) as exc:
             LOG.warning("Unreadable radar snapshot: %s", exc)
             raise HTTPException(503, detail="snapshot_unavailable") from exc
@@ -237,11 +237,13 @@ def router(path, *, collector=collect, cooldown=60):
 
     @api.post("/refresh", status_code=202)
     def refresh():
+        if published:
+            return {"status":"succeeded","accepted":True,"stats":{}}
         return job.start()
 
     @api.post("/search")
     def search(body: EventQuery, request: Request):
-        taxonomy = request.app.state.service.taxonomy
+        taxonomy = (getattr(request.state,"service",None) or request.app.state.service).taxonomy
         labels = [taxonomy.sector(value) for value in body.sectors]
         if None in labels:
             raise HTTPException(422, detail="unknown_sector")

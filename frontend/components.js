@@ -124,7 +124,7 @@ export function renderDetail(company) {
       sources.append(row);
     } catch { /* URL 不合法时不生成链接 */ }
   }
-  panel.append(sources, ...company.data_warnings.map(text => element("p", text, "warning")));
+  panel.append(window.publishedProfile(company.published_fields),sources, ...company.data_warnings.map(text => element("p", text, "warning")));
   return panel;
 }
 

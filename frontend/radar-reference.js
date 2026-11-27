@@ -138,7 +138,7 @@ export function createCompanyReference(onSectorChange) {
     if (row.data_status === "needs_review") header.append(node("span",t("review"),"badge pending"));
     const site = row.website && link(row.website,t("website") + " ↗","button");
     if (site) header.append(site);
-    const body = [header];
+    const body = [header,window.publishedProfile(row.published_fields,state.lang==="en")];
     if (row.business_description) body.push(node("h4",t("business_description")),node("p",row.business_description));
     for (const [field, items] of [["sub_tracks",row.sectors.map(sectorLabel)],["products",row.products]]) {
       if (items.length) body.push(node("h4",t(field)),node("p",items.join(" · ")));

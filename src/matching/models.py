@@ -80,7 +80,7 @@ class CompanySummary(Contract):
     headquarters: str | None
     sectors: list[str]
     funding_stage: str | None
-    data_status: Literal["excel_only", "needs_review"]
+    data_status: Literal["excel_only", "needs_review", "published"]
 
 
 class CompanyPage(Contract):
@@ -98,6 +98,7 @@ class FundingSummary(Contract):
 
 
 class CompanyDetail(CompanySummary):
+    published_fields: dict = Field(default_factory=dict)
     website: str | None
     business_description: str | None
     products: list[str]

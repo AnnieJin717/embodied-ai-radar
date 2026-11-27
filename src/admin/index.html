@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>具身项目雷达 · 管理员</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:white;color:black;font:14px "Microsoft YaHei",Arial,sans-serif}
+header,main,footer{padding:18px 24px}header,footer{border-bottom:1px solid black;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header strong{font-size:18px;margin-right:auto}footer{border-top:1px solid black;border-bottom:0}
+main{max-width:1600px;margin:auto}.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:18px}
+section,article{border:1px solid black;padding:14px;min-width:0;margin-bottom:12px}h2{font-size:16px;margin:0 0 12px}
+button,input,textarea,select{border:1px solid black;border-radius:0;background:white;color:black;font:inherit;padding:7px}
+button{cursor:pointer}button:hover,button[aria-current=true]{background:black;color:white}button:disabled{opacity:.5;cursor:wait}
+label{display:block;margin:8px 0}input:not([type=checkbox]),textarea{width:100%}textarea{min-height:125px}
+table{width:100%;border-collapse:collapse}td,th{border:1px solid black;padding:7px;text-align:left;overflow-wrap:anywhere}
+th{background:black;color:white}.table{overflow:auto}.partial{background:#fff3cd;padding:10px}.review{background:#f2f2f2}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.filters select{min-width:115px;max-width:175px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:black}.notice{min-height:24px;white-space:pre-wrap}
+[hidden]{display:none!important}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+</style>
+<header><strong data-i="具身项目雷达 · 管理员|Embodied AI Radar · Admin"></strong>
+<button id="extractTab" data-i="抽取|Extraction"></button><button id="companiesTab" data-i="公司库|Companies"></button>
+<button id="queueTab" data-i="待复核|Review queue"></button><button id="pubTab" data-i="发布管理|Publishing"></button><button id="language">English</button></header>
+<main><section id="configCheck"><strong data-i="模型配置检查 · 实际链路验证版 11/27|Model configuration">模型配置检查 · 实际链路验证版 11/27</strong><p id="configSummary" data-i="正在检查配置文件…|Checking configuration…">正在检查配置文件…</p><button id="refreshConfig" type="button" data-i="重新检查配置|Check configuration again">重新检查配置</button></section><details open><summary data-i="使用说明 / Scope &amp; workflow|Coverage and extraction workflow">使用说明 / Scope &amp; workflow</summary><p data-i="预置 60 家具身智能公司。公司库支持展示创始人、团队、融资、产品等字段；点开公司可编辑并查看 Excel 单元格来源。缺失值不编造。|The directory starts with 60 embodied AI companies. Open a company to review its founders, team, funding and products, edit its profile or trace a field to its source spreadsheet cell. Information absent from the source is left blank.">预置 60 家具身智能公司。公司库支持展示创始人、团队、融资、产品等字段；点开公司可编辑并查看 Excel 单元格来源。缺失值不编造。</p><p data-i="直接输入公开新闻链接即可抽取，无需粘贴 200 字正文。优先读取网页，失败后尝试阅读服务。36 氪支持 RSS；其他公开新闻取决于登录与反爬限制。获取失败时可手工补录。|Paste a public article URL. The system retrieves the page directly and then tries a reader service if needed. The 36Kr feed supports RSS. Other public sites may restrict access. You can also paste the article text.">直接输入公开新闻链接即可抽取，无需粘贴 200 字正文。优先读取网页，失败后尝试阅读服务。36 氪支持 RSS；其他公开新闻取决于登录与反爬限制。获取失败时可手工补录。</p><p data-i="应用：获取正文 → LLM：主体识别（1 次）→ LLM：逐公司抽取（N 次，最多 6 家）→ 规则：原文证据与标签校验 → 人工审核 → SQLite → 用户只读接口 / 快照。|In the default fast mode, a single model call identifies the companies and extracts fields and events. The application checks quotations and tags. An administrator reviews the results before approved records are saved to the database.">应用：获取正文 → LLM：主体识别（1 次）→ LLM：逐公司抽取（N 次，最多 6 家）→ 规则：原文证据与标签校验 → 人工审核 → SQLite → 用户只读接口 / 快照。</p><p data-i="正常调用 1 + N 次（不相关报道 1 次）；每阶段最多两次尝试，最多 14 次。规则预览不调用模型。默认快速模式一次完成分类与多公司抽取（失败最多重试一次）；原两阶段模式可通过 ADMIN_EXTRACTION_MODE=staged 对照。实际调用数与耗时随结果展示。|Fast mode allows one retry. In staged mode (ADMIN_EXTRACTION_MODE=staged), the model first classifies the article, then makes one call per company (up to six). An unrelated article normally requires one call. With retries, staged mode can make up to 14 calls. The rule-based preview uses no model calls. Each extraction reports its call count and elapsed time.">正常调用 1 + N 次（不相关报道 1 次）；每阶段最多两次尝试，最多 14 次。规则预览不调用模型。默认快速模式一次完成分类与多公司抽取（失败最多重试一次）；原两阶段模式可通过 ADMIN_EXTRACTION_MODE=staged 对照。实际调用数与耗时随结果展示。</p></details><div class="notice" id="status" role="status"></div>
+<div id="extraction" class="grid"><section>
+<h2 data-i="新闻输入|Article input"></h2>
+<label><span data-i="来源 URL（多个链接每行一个）|Source URLs (one per line)"></span><textarea id="url" rows="2" style="min-height:48px" placeholder="https://…"></textarea></label>
+<label><span data-i="报道时间|Publication date"></span><input id="published" type="date"></label>
+<button id="fetchArticle" data-i="预览链接正文（无需模型）|Preview article text (no AI required)"></button><details><summary data-i="正文预览 / 手工补录（可选）|View or paste article text (optional)"></summary><textarea id="body"></textarea></details>
+<div class="controls"><button id="run" data-i="开始抽取|Extract"></button><button id="rules" data-i="规则预览|Preview rule-based extraction"></button></div>
+<button id="rss" data-i="更新 36 氪新闻|Refresh 36Kr feed"></button><div id="candidates"></div>
+</section><section><h2 data-i="抽取结果|Extraction results"></h2><div id="result"></div></section></div>
+<section id="companyView" hidden><h2 data-i="公司库|Companies"></h2><input id="search" type="search">
+<details><summary data-i="选择公司列表显示字段|Choose company columns"></summary><div id="columns" class="controls"></div></details><div id="filters" class="controls filters"></div><div id="companyList" class="table"></div><div id="detail"></div></section>
+<section id="queueView" hidden><h2 data-i="待复核|Review queue"></h2>
+<input id="queueSearch" type="search"><div id="queue"></div></section>
+<section id="publishView" hidden><h2 data-i="发布管理|Publishing"></h2>
+<div class="controls"><a href="/" target="_blank" data-i="打开客户当前页面|View live client"></a> · <a href="/admin/api/backup" download data-i="备份完整数据库|Download database backup"></a></div>
+<div class="controls"><input id="newName" maxlength="180"><button id="newCompany" data-i="新建内部公司|Create internal company"></button></div>
+<label><span data-i="选择公司|Select company"></span> <select id="pubCompany"></select></label><div id="pubEditor"></div>
+<div id="cart"></div></section></main><footer><span id="metrics"></span><a href="/admin/api/export" data-i="导出公司快照|Export company snapshot"></a></footer>
+<script src="/demo-assets/published-profile.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const taskKey="admin-extraction-task";
+let extracting=false;
+function safeStorage(kind){
+ const fallback=new Map();return {
+ getItem(key){try{return window[kind].getItem(key)??fallback.get(key)??null}catch{return fallback.get(key)??null}},
+ setItem(key,value){fallback.set(key,String(value));try{window[kind].setItem(key,value)}catch{}},
+ removeItem(key){fallback.delete(key);try{window[kind].removeItem(key)}catch{}}
+ };
+}
+const languageStorage=safeStorage("localStorage"),taskStorage=safeStorage("sessionStorage");
+let en=languageStorage.getItem("admin-language")==="en", view="extraction", companies=[], latest=null, candidates=[], queue=[];
+const L=(zh,english)=>en?english:zh;
+const labels={
+name:["公司名称","Company name"],founded_date:["成立时间","Date founded"],headquarters:["总部地域","Headquarters"],
+compiled_date:["资料整理日期","Profile compilation date"],latest_funding_disclosure_date:["融资披露日期","Funding disclosure date"],interview_priority:["访谈优先级","Interview priority"],investment_thesis:["投资逻辑","Investment thesis"],diligence_questions:["尽调问题","Due diligence questions"],scope_notes:["范围说明","Scope notes"],source_company_id:["原始编号","Source company ID"],founder_education:["创始人学历","Founders’ education"],founder_work_background:["创始人工作背景","Founders’ professional experience"],contact_information:["公开联系方式","Public contact details"],website:["官网","Website"],founders:["创始人","Founders"],business_description:["主营业务","Business overview"],
+funding_stage:["当前阶段","Funding stage"],funding_history:["融资历史","Funding history"],historical_investors:["老股东","Historical investors"],
+valuation:["最新估值","Valuation"],products:["主要产品","Products"],major_customers:["标杆客户","Major customers"],
+business_models:["商业模式","Business models"],shipments:["出货量","Shipments"],revenue:["营收规模","Revenue"],
+employee_scale:["员工规模","Headcount"],primary_tracks:["一级赛道","Sectors"],sub_tracks:["二级细分","Subsectors"],
+application_scenarios:["场景","Use cases"],technology_routes:["技术路线","Technical approaches"],
+_source:["数据来源","Source"],_updated:["最近更新","Updated"]};
+const englishTerms = {
+  "3C电子制造": "Consumer electronics manufacturing",
+  "养老助残": "Elder care and disability support",
+  "农业作业": "Agriculture",
+  "医疗康复": "Medical rehabilitation",
+  "半导体工厂": "Semiconductor manufacturing",
+  "商业清洁": "Commercial cleaning",
+  "商场导览接待": "Shopping center reception and wayfinding",
+  "安防巡逻": "Security patrols",
+  "家庭服务": "Home services",
+  "快递分拣": "Parcel sorting",
+  "文娱表演": "Entertainment and live performance",
+  "水下作业": "Underwater operations",
+  "汽车工厂": "Automotive manufacturing",
+  "消防救援": "Firefighting and rescue",
+  "物流仓储搬运": "Warehousing and material handling",
+  "电力巡检": "Power infrastructure inspection",
+  "矿山、高危作业": "Mining and hazardous operations",
+  "科研实验室平台": "Research laboratory platforms",
+  "酒店、餐饮配送": "Hotel and restaurant delivery",
+  "高校科研教学": "University research and teaching",
+  "授权合作": "Licensing partnerships",
+  "整机租赁（RaaS）": "Robot rental (RaaS)",
+  "硬件销售": "Hardware sales",
+  "解决方案交付": "Solution delivery",
+  "软件订阅": "Software subscriptions",
+  "具身智能": "Embodied AI",
+  "丝杠、线性执行器": "Lead screws and linear actuators",
+  "人形机器人本体": "Humanoid robot platforms",
+  "仿真与数据合成平台": "Simulation and synthetic data platforms",
+  "传感器（力、触觉、视觉、IMU）": "Force, tactile, vision and inertial sensors",
+  "关节模组": "Joint modules",
+  "具身智能中间件、操作系统": "Robotics middleware and operating systems",
+  "减速器（谐波、RV、行星）": "Harmonic, RV and planetary reducers",
+  "四足机器人": "Quadruped robots",
+  "复合机器人、移动操作机器人": "Mobile manipulators",
+  "数据采集（遥操作、动捕）": "Teleoperation and motion capture data collection",
+  "服务机器人（配送、清洁、导览整机）": "Service robots for delivery, cleaning and wayfinding",
+  "机器人ODM、OEM代工": "Robot ODM and OEM manufacturing",
+  "机器人大脑（VLA、具身大模型）": "Robot intelligence (VLA and embodied foundation models)",
+  "机械臂（工业、协作）": "Industrial and collaborative robot arms",
+  "灵巧手": "Dexterous hands",
+  "特种机器人（巡检、消防、水下整机）": "Special-purpose inspection, firefighting and underwater robots",
+  "电池与能源系统": "Batteries and energy systems",
+  "端侧算力芯片、控制器": "Edge AI chips and controllers",
+  "结构件、轻量化材料": "Structural components and lightweight materials",
+  "运控算法、运动小脑": "Motion control algorithms",
+  "【其他】云端大脑+边缘执行": "Other: Cloud planning and edge execution",
+  "【其他】智驾方案迁移": "Other: Adapted autonomous driving systems",
+  "【大脑层】Diffusion Policy": "Planning: Diffusion Policy",
+  "【大脑层】VLA端到端": "Planning: End-to-end VLA",
+  "【大脑层】世界模型": "Planning: World models",
+  "【大脑层】分层架构（大模型规划+小模型执行）": "Planning: Hierarchical planning and execution",
+  "【大脑层】多模态大模型": "Planning: Multimodal foundation models",
+  "【感知层】六维力传感": "Perception: Six-axis force sensing",
+  "【感知层】激光雷达+视觉融合": "Perception: LiDAR and vision fusion",
+  "【感知层】纯视觉方案": "Perception: Vision-only systems",
+  "【感知层】触觉感知阵列": "Perception: Tactile sensor arrays",
+  "【数据层】人类动捕数据": "Data: Human motion capture",
+  "【数据层】仿真合成数据": "Data: Synthetic simulation data",
+  "【数据层】视频学习": "Data: Learning from video",
+  "【数据层】遥操作真机数据": "Data: Real-world teleoperation",
+  "【硬件层】RV与行星传动": "Hardware: RV and planetary drives",
+  "【硬件层】准直驱": "Hardware: Quasi-direct drive",
+  "【硬件层】液压驱动": "Hardware: Hydraulic actuation",
+  "【硬件层】电驱": "Hardware: Electric actuation",
+  "【硬件层】腱绳驱动": "Hardware: Tendon drives",
+  "【硬件层】谐波传动": "Hardware: Harmonic drives",
+  "【硬件层】连杆驱动": "Hardware: Linkage drives",
+  "【运控层】MPC模型预测控制": "Motion control: Model predictive control",
+  "【运控层】全身控制WBC": "Motion control: Whole-body control",
+  "【运控层】强化学习": "Motion control: Reinforcement learning",
+  "【运控层】柔顺力控": "Motion control: Compliant force control",
+  "【运控层】模仿学习": "Motion control: Imitation learning",
+  "天使": "Angel",
+  "上市": "Publicly listed",
+  "战略投资": "Strategic investment",
+  "E轮及以后": "Series E or later",
+  "股权融资（轮次未披露）": "Equity financing (round undisclosed)",
+  "股权融资（轮次未披露）（Pre-A及Pre-A+轮）": "Equity financing (reported as pre-Series A and pre-Series A+)",
+  "B+轮（B++轮）": "Series B+ (reported as Series B++)",
+  "未披露": "Not disclosed",
+  "manual": "Manual entry",
+  "ai": "AI extraction"
+};
+function term(value){
+  if (!en || typeof value !== "string") return value;
+  if (Object.hasOwn(englishTerms,value)) return englishTerms[value];
+  const stage=value.match(/^(Pre-)?([A-E]\+*)轮?$/);
+  return stage ? (stage[1] ? "Pre-Series " : "Series ")+stage[2] : value;
+}
+const controlledFields=["primary_tracks","sub_tracks","technology_routes","application_scenarios","business_models","funding_stage","_source"];
+function fieldDisplay(key,value){
+  if (!en || !controlledFields.includes(key)) return display(value);
+  return Array.isArray(value) ? value.map(term).join(", ") : display(term(value));
+}
+const nameOf=k=>labels[k]?.[en?1:0]||k;
+function el(tag,text,parent){const n=document.createElement(tag);if(text!==null)n.textContent=text;if(parent)parent.append(n);return n}
+function btn(parent,text,fn){const b=el("button",text,parent);b.onclick=()=>work(b,fn);return b}
+const errorTranslations={
+  "无法读取配置文件，请用记事本另存为 UTF-8 编码。": "Unable to read the configuration file. Save it using UTF-8 encoding.",
+  "模型 ID 格式应为 提供商/模型名，请检查 OPENROUTER_MODEL。": "Set OPENROUTER_MODEL to a model ID in provider/model format.",
+  "后台未读取到完整模型配置。缺少：": "Incomplete model configuration. Missing: ",
+  "。请查看页面顶部配置检查，确认文件位于启动脚本同一目录。": " Check the configuration panel and place the file in the same directory as the startup script.",
+  "新闻正文获取失败，尚未调用模型。原网页：": "Article retrieval failed before the model was called. Source page: ",
+  "原网页未提供正文": "No article text available",
+  "原网页为安全检测页、空页面或缺少可用正文": "Security check, empty page or no readable article text",
+  "；备用阅读服务：": ". Fallback reader: ",
+  "。请稍后点击预览重试或换一个公开新闻链接；也可粘贴正文。如果浏览器能访问但后台不能，请检查系统代理和防火墙。": ". Retry the preview, use another public URL or paste the article text. If only the browser can access the page, check your proxy and firewall settings.",
+  "域名解析失败": "DNS lookup failed",
+  "连接或读取超时": "Connection or read timed out",
+  "TLS 证书或加密连接失败": "TLS connection or certificate verification failed",
+  "连接断开或网络不可达": "Connection lost or network unreachable",
+  "阅读服务返回 HTTP ": "Reader returned HTTP ",
+  "阅读服务响应超过大小限制": "Reader response exceeds the size limit"
+};
+function message(text){if(!en||!text)return text;for(const [original,english] of Object.entries(errorTranslations))text=text.replaceAll(original,english);return text;}
+function status(text){$("status").textContent=message(text)||""}
+function display(value){return value==null?"":typeof value==="string"?value:JSON.stringify(value)}
+function editableValue(key,value){
+  if(!en||!controlledFields.includes(key))return display(value);
+  return Array.isArray(value)?JSON.stringify(value.map(term)):display(term(value));
+}
+function readField(key,input,original){
+  if(input.value===editableValue(key,original))return original;
+  const value=inputValue(input,original);
+  if(!en||!controlledFields.includes(key))return value;
+  function canonical(item){
+    if(typeof item!=="string")return item;
+    const match=Object.keys(englishTerms).find(k=>englishTerms[k]===item);
+    if(match)return match;
+    return item.replace(/^Pre-Series ([A-E][+]*)$/,"Pre-$1").replace(/^Series ([A-E][+]*)$/,"$1");
+  }
+  return Array.isArray(value)?value.map(canonical):canonical(value);
+}
+function eventLabel(type){
+  const names={funding:["融资","Funding"],product_launch:["产品发布","Product launch"],research_plan:["研发计划","Research plan"],prototype:["原型","Prototype"]};
+  return names[type]?.[en?1:0]||type;
+}
+function inputValue(input,original){if(input.value===display(original))return original;
+  if(!input.value.trim())return null;
+  if(Array.isArray(original)||input.value.trim().startsWith("[")){const parsed=JSON.parse(input.value);if(!Array.isArray(parsed))throw Error(L("请输入 JSON 数组","Enter a JSON array"));return parsed}
+  return input.value.trim()}
+function safeLink(parent,url){if(typeof url!=="string"||!/^https?:\/\//i.test(url))return;const a=el("a",url,parent);a.href=url;a.target="_blank";a.rel="noopener noreferrer"}
+async function api(path,data){
+  const res=await fetch("/admin/api/"+path,data===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  const answer=await res.json().catch(()=>null);
+  if(!res.ok||answer===null){
+    const error=Error(answer?.error||("HTTP "+res.status));
+    error.httpStatus=res.status;
+    throw error;
+  }
+  return answer;
+}
+async function work(button,fn){button.disabled=true;status("");try{await fn()}catch(e){status(e.message)}finally{button.disabled=false}}
+function translate(){document.title=L("具身项目雷达 · 管理员","Embodied AI Radar · Admin");document.documentElement.lang=en?"en":"zh-CN";
+  document.querySelectorAll("[data-i]").forEach(n=>n.textContent=n.dataset.i.split("|")[en?1:0]);
+  $("language").textContent=en?"Chinese":"English";$("search").placeholder=L("按公司名称搜索","Search company names");
+  $("queueSearch").placeholder=L("按公司、字段或来源搜索","Search company, field, or source");
+}
+function fieldTable(parent){const wrap=el("div",null,parent);wrap.className="table";const table=el("table",null,wrap);return table}
+function header(table,labels){const row=el("tr",null,el("thead",null,table));for(const label of labels)el("th",label,row)}
+function card(parent,data,subject,index,after){
+  const box=el("article",null,parent);el("h2",subject.name,box);safeLink(box,data.url);
+  const current=companies.find(c=>c.name===subject.name || (c.aliases||[]).includes(subject.name));
+  const picker=el("select",null,el("label",L("合并到公司 ","Merge into "),box));
+  el("option",L("按公司名或别名自动匹配","Match company name or alias"),picker).value="";
+  el("option",L("新建公司","Create company"),picker).value="new";
+  for(const company of companies)el("option",company.name,picker).value=company.id;
+  const table=fieldTable(box), fields={};header(table,[L("保留","Accept"),L("字段","Field"),L("提取值","Extracted value"),L("现值","Current value"),L("原文依据","Evidence")]);
+  for(const [key,entry] of Object.entries(subject.fields)){
+    const row=el("tr",null,table);if(!entry.verified_quote||entry.custom)row.className="review";
+    const check=el("input",null,el("td",null,row));check.type="checkbox";check.checked=entry.verified_quote&&!entry.custom;
+    el("td",nameOf(key),row);const input=el("input",null,el("td",null,row));input.value=editableValue(key,Object.hasOwn(entry,"draft_value")?entry.draft_value:entry.value);
+    const previous=el("td",fieldDisplay(key,current?.[key]),row);
+    const evidence=el("details",null,el("td",null,row));
+    el("summary",entry.custom?L("自定义","Custom"):entry.verified_quote?L("查看原文","View quote"):L("待核实","Needs verification"),evidence);
+    el("p",entry.evidence,evidence);
+    fields[key]={check,input,original:entry.value,previous};
+  }
+  picker.onchange=()=>{const selected=companies.find(c=>c.id===picker.value)||(!picker.value?current:null);
+    for(const [key,field] of Object.entries(fields))field.previous.textContent=fieldDisplay(key,selected?.[key]);};
+  const eventChecks=subject.events.map(event=>{
+    const label=el("label",null,box);const check=el("input",null,label);check.type="checkbox";check.checked=event.verified_quote;
+    el("span",[" "+eventLabel(event.type),event.summary,data.published_at,event.event_date,event.date_needs_review?L("日期待核实","Date needs review"):null].filter(Boolean).join(" · "),label);
+    el("p",event.evidence||L("待核实","Needs verification"),label);return check;
+  });
+  const actions=el("div",null,box);actions.className="controls";
+  async function decide(action){
+    const selected={};
+    if(action!=="discarded")for(const [key,f] of Object.entries(fields))if(f.check.checked||action==="pending")selected[key]=readField(key,f.input,f.original);
+    await api("review",{id:data.id,revision:data.revision,subject_index:index,action,company_id:picker.value,
+      fields:selected,events:action==="approved"?eventChecks.flatMap((check,i)=>check.checked?[i]:[]):[]});
+    box.remove();status(action==="approved"?L("已确认入库","Approved and saved"):action==="pending"?L("已存为待复核","Saved for review"):L("已放弃","Discarded"));
+    companies=await api("companies");if(after)await after();
+  }
+  btn(actions,L("确认入库","Approve and save"),()=>decide("approved"));
+  btn(actions,L("放弃","Discard"),()=>decide("discarded"));
+  btn(actions,L("存为待复核","Save for review"),()=>decide("pending"));
+}
+function renderResult(){
+  const root=$("result");root.replaceChildren();if(!latest)return;
+  if(latest.category==="unrelated")el("p",L("该新闻不属于网站范畴","Outside the radar scope"),root);
+  if(latest.category==="partial")el("p",L("仅显示通用公司信息","Only general company fields are shown"),root).className="partial";
+  if(latest.duplicate)el("p",L("该链接已处理过，当前为新版本","Previously processed. Showing the new revision."),root);
+  for(const [i,s] of (latest.subjects||[]).entries())if(s)card(root,latest,s,i,()=>{latest.subjects[i]=null});
+  if(latest.rule_events?.length||!latest.category){const d=el("details",null,root);d.open=!latest.category;
+    el("summary",L("规则引擎结果","Rule engine results"),d);el("pre",JSON.stringify(latest.rule_events,null,2),d);}
+  const u=latest.usage;$("metrics").textContent=u?L("正文 / 模型耗时","Fetch / model time")+" "+(latest.fetch_ms||0)+" / "+latest.elapsed_ms+" ms · "+latest.llm_calls+" LLM calls · "+(latest.extraction_mode||"staged")+" · "+
+    (u.prompt_tokens+u.completion_tokens)+" tokens · "+(u.cost==null?L("成本未返回","Cost unavailable"):"USD "+u.cost):"";
+}
+let visibleColumns=["founders","headquarters","sub_tracks","funding_stage","_updated"];
+function renderColumns(){const root=$("columns");root.replaceChildren();for(const key of Object.keys(labels).filter(k=>k!=="name")){const label=el("label",null,root),check=el("input",null,label);check.type="checkbox";check.checked=visibleColumns.includes(key);el("span",nameOf(key),label);check.onchange=()=>{visibleColumns=check.checked?[...visibleColumns,key]:visibleColumns.filter(k=>k!==key);renderCompanies()}}}
+$("fetchArticle").onclick=()=>work($("fetchArticle"),async()=>{const urls=$("url").value.trim().split(/\s+/);if(urls.length!==1||!urls[0])throw Error(L("请输入一个链接进行预览","Enter one URL"));status(L("正在获取正文…","Fetching article…"));const r=await api("article",{url:urls[0]});$("body").value=r.text;$("body").closest("details").open=true;if(r.published_at)$("published").value=r.published_at.slice(0,10);status(L("正文字符数：","Article characters: ")+r.characters)});
+$("url").oninput=()=>{$("body").value=""};
+function payload(){return {url:$("url").value,text:$("body").value,published_at:$("published").value}}
+async function followExtraction(data){
+  let id=taskStorage.getItem(taskKey);
+  if(!id){
+    status(L("正在提交抽取任务","Submitting extraction task"));
+    id=(await api("extract",data)).id;
+    taskStorage.setItem(taskKey,id);
+  }
+  let failures=0;
+  while(true){
+    status(L("后台正在抽取，稍后自动显示结果","Extraction in progress. Results will appear here."));
+    await new Promise(resolve=>setTimeout(resolve,500));
+    let job;
+    try{job=await api("extract/jobs/"+encodeURIComponent(id));failures=0}
+    catch(error){
+      if(error.httpStatus===404){taskStorage.removeItem(taskKey);throw error}
+      if(++failures>=3)throw Error(L("查询暂时失败。点击「开始抽取」继续查询当前任务。","Status check interrupted. Click Extract to resume checking this task."));
+      continue;
+    }
+    if(job.status==="running"){status(job.phase==="fetching_article"?L("正在获取新闻正文…","Fetching article body…"):L("正文已获取，模型抽取中…","Article retrieved. Extracting company information…"));continue;}
+    taskStorage.removeItem(taskKey);
+    if(job.status==="failed")throw Error(job.error);
+    return job.result;
+  }
+}
+async function extractionAction(fn){
+  if(extracting)return;
+  extracting=true;$("run").disabled=true;$("rules").disabled=true;status("");
+  try{await fn()}catch(e){status(e.message)}
+  finally{extracting=false;$("run").disabled=false;$("rules").disabled=false}
+}
+function extractCurrent(){
+  return extractionAction(async()=>{
+    const input=payload();
+    const urls=[...new Set(input.url.split(/\s+/).filter(Boolean))];
+    if(taskStorage.getItem(taskKey)||urls.length<=1){
+      latest=await followExtraction({...input,url:urls[0]||""});renderResult();status("");return;
+    }
+    if(urls.length>10)throw Error(L("每批最多 10 个链接","Use up to 10 URLs per batch"));
+    if(input.text.trim())throw Error(L("批量抽取时请清空正文","Clear pasted text for batch extraction"));
+    latest=null;renderResult();const root=$("result"),errors=[];let completed=0;
+    for(const url of urls){
+      try{
+        const data=await followExtraction({url,published_at:input.published_at});
+        const group=el("section",null,root);safeLink(group,url);
+        if(data.category==="unrelated")el("p",L("该新闻不属于网站范畴","Outside the radar scope"),group);
+        if(data.category==="partial")el("p",L("仅显示通用公司信息","Only general company fields are shown"),group).className="partial";
+        for(const [index,subject] of data.subjects.entries())card(group,data,subject,index);
+        completed++;
+      }catch(e){errors.push(url+": "+e.message);if(taskStorage.getItem(taskKey)||e.httpStatus===409)break;}
+    }
+    status(L("完成 ","Completed ")+completed+"/"+urls.length+(errors.length?"\n"+errors.join("\n"):""));
+  });
+}
+$("run").onclick=extractCurrent;
+$("rules").onclick=()=>work($("rules"),async()=>{latest=await api("rules",payload());renderResult();});
+function renderCandidates(){
+  const root=$("candidates");root.replaceChildren();const selected=[];
+  for(const row of candidates){
+    const label=el("label",null,root),check=el("input",null,label);check.type="checkbox";selected.push([check,row]);
+    el("span"," "+row.title+" · "+(row.published_at||"")+" · "+(row.topic_focus==="primary"?L("主要报道对象","Main subject"):row.topic_focus==="mention"?L("文中提及","Mentioned in article"):(row.topic_focus||"")),label);
+    btn(root,L("选用","Use"),()=>{$("url").value=row.url;$("published").value=(row.published_at||"").slice(0,10);$("body").value="";});
+  }
+  if(candidates.length){
+    const batch=el("button",L("抽取已选","Extract selected"),root);
+    batch.onclick=()=>extractionAction(async()=>{
+      if(taskStorage.getItem(taskKey)){
+        latest=await followExtraction();renderResult();status("");return;
+      }
+      const rows=selected.filter(([check])=>check.checked).map(([,row])=>row);
+      if(!rows.length)throw Error(L("请选择新闻","Select an article"));
+      const errors=[];
+      let completed=0;
+      for(const row of rows){
+        try{
+          latest=await followExtraction({url:row.url,published_at:row.published_at});
+          renderResult();completed++;
+        }catch(e){
+          errors.push(row.title+": "+e.message);
+          if(taskStorage.getItem(taskKey)||e.httpStatus===409)break;
+        }
+      }
+      status(L("完成 ","Completed ")+completed+"/"+rows.length+(errors.length?"\n"+errors.join("\n"):""));
+    });
+  }
+}
+$("rss").onclick=()=>work($("rss"),async()=>{candidates=await api("feed",{});renderCandidates()});
+function searchText(value){return display(value).toLowerCase()}
+function renderQueue(){
+  const root=$("queue");root.replaceChildren();const query=$("queueSearch").value.trim().toLowerCase();
+  for(const row of queue){const s=row.payload.subjects[row.subject_index];
+    if(query&&![s.name,row.payload.url,...Object.keys(s.fields),...Object.keys(s.fields).map(nameOf)].some(v=>searchText(v).includes(query)))continue;
+    card(root,{...row.payload,id:row.id,revision:row.revision},s,row.subject_index,async()=>{queue=await api("queue");renderQueue()});}
+  if(!root.children.length)el("p",L("没有待复核结果","No pending results"),root);
+}
+$("queueSearch").oninput=renderQueue;
+function values(v){return (Array.isArray(v)?v:[v]).filter(x=>typeof x==="string"&&x);}
+function renderFilters(){
+  const root=$("filters");root.replaceChildren();
+  for(const field of ["primary_tracks","sub_tracks","application_scenarios","technology_routes","funding_stage","_source"]){
+    const label=el("label",nameOf(field),root),select=el("select",null,label);select.multiple=true;select.size=3;select.dataset.field=field;
+    for(const value of [...new Set(companies.flatMap(c=>values(c[field])))].sort())el("option",term(value),select).value=value;
+    select.onchange=renderCompanies;
+  }
+}
+function renderCompanies(){
+  const root=$("companyList");root.replaceChildren();const query=$("search").value.trim().toLowerCase();
+  const filters=[...$("filters").querySelectorAll("select")];
+  const columns=["name",...visibleColumns];
+  const table=fieldTable(root);header(table,[...columns.map(nameOf),L("复核状态","Review status")]);
+  for(const company of companies){
+    if(query&&!searchText(company.name).includes(query))continue;
+    if(filters.some(f=>f.selectedOptions.length&&![...f.selectedOptions].some(o=>values(company[f.dataset.field]).includes(o.value))))continue;
+    const row=el("tr",null,table);btn(el("td",null,row),company.name,()=>showCompany(company));
+    for(const key of columns.slice(1))el("td",fieldDisplay(key,company[key])||L("未披露","Not disclosed"),row);
+    el("td",L("已确认","Confirmed"),row);
+  }
+}
+$("search").oninput=renderCompanies;
+async function showCompany(company){
+  const root=$("detail");root.replaceChildren();el("h2",company.name,root);const table=fieldTable(root);
+  header(table,[L("字段","Field"),L("值","Value"),L("来源","Source")]);
+  const edits={};
+  for(const key of Object.keys(labels).filter(k=>!k.startsWith("_")&&k!=="primary_tracks")){
+    const row=el("tr",null,table);el("td",nameOf(key),row);const input=el("input",null,el("td",null,row));
+    input.value=editableValue(key,company[key]);edits[key]=input;const source=el("td",null,row);
+    safeLink(source,company.admin_sources?.[key]);const old=company.provenance?.cells?.[key];
+    if(!company.admin_sources?.[key]&&old)el("span",[company.provenance.workbook,company.provenance.sheet,old.coordinate].filter(Boolean).join(" · "),source);
+  }
+  btn(root,L("保存修改","Save changes"),async()=>{
+    const fields={};for(const [key,input] of Object.entries(edits))if(input.value!==editableValue(key,company[key]))fields[key]=readField(key,input,company[key]);
+    if(!Object.keys(fields).length)return;
+    await api("company",{id:company.id,fields});companies=await api("companies");renderCompanies();await showCompany(companies.find(c=>c.id===company.id));status(L("已保存","Saved"));
+  });
+  el("h2",L("公司动态","Company events"),root);
+  for(const event of await api("company/"+encodeURIComponent(company.id))){
+    const row=el("p",[event.published_at,event.event_date,eventLabel(event.type),event.summary].filter(Boolean).join(" · "),root);safeLink(row,event.url);
+  }
+}
+async function openView(next){
+  view=next;for(const id of ["extraction","companyView","queueView","publishView"])$(id).hidden=id!==view;
+  for(const [id,target] of [["extractTab","extraction"],["companiesTab","companyView"],["queueTab","queueView"],["pubTab","publishView"]])$(id).setAttribute("aria-current",String(view===target));
+  companies=await api("companies");
+  if(view==="publishView")await loadPublishing();
+  if(view==="companyView"){renderColumns();renderFilters();renderCompanies();}
+  if(view==="queueView"){queue=await api("queue");renderQueue();}
+}
+$("extractTab").onclick=()=>work($("extractTab"),()=>openView("extraction"));
+$("companiesTab").onclick=()=>work($("companiesTab"),()=>openView("companyView"));
+$("queueTab").onclick=()=>work($("queueTab"),()=>openView("queueView"));
+$("language").onclick=()=>{en=!en;languageStorage.setItem("admin-language",en?"en":"zh");translate();status("");checkConfig();if(view==="publishView")loadPublishing().catch(e=>status(e.message));
+  renderResult();renderCandidates();if(view==="companyView"){renderColumns();renderFilters();renderCompanies();$("detail").replaceChildren()}if(view==="queueView")renderQueue();};
+async function checkConfig(){
+ const target=$("configSummary");
+ try{const c=await api("config-status");target.textContent=[
+   c.error?message(c.error):c.ready?L("模型配置已读取（尚未验证密钥有效性）。","Configuration loaded. The API key has not been verified."):L("缺少配置：","Missing settings: ")+c.missing.join(", "),
+   L("文件：","File: ")+(c.file||L("未找到 .env 或 .env.txt","No .env or .env.txt file found")),
+   L("应放目录：","Configuration directory: ")+c.directory,
+   L("模型：","Model: ")+(c.model||L("未填写","Not specified"))].join("\n");target.style.whiteSpace="pre-wrap"}
+ catch(e){target.textContent=L("配置检查失败：","Configuration check failed: ")+message(e.message)}
+}
+$("refreshConfig").onclick=()=>work($("refreshConfig"),checkConfig);
+const basket=new Map();
+let focusedCompany="";
+$("pubTab").onclick=()=>work($("pubTab"),()=>openView("publishView"));
+$("newCompany").onclick=()=>work($("newCompany"),async()=>{
+ const name=$("newName").value.trim();if(!name)throw Error(L("请输入公司名称","Enter a company name"));
+ const company=await api("company/create",{fields:{name}});
+ companies=await api("companies");$("newName").value="";await openView("companyView");await showCompany(company);
+});
+async function loadPublishing(){
+ const pick=$("pubCompany");pick.replaceChildren();
+ for(const c of companies)el("option",c.name,pick).value=c.id;
+ if(companies.some(c=>c.id===focusedCompany))pick.value=focusedCompany;
+ pick.onchange=()=>editPublication().catch(e=>status(e.message));
+ renderBasket();await editPublication();
+}
+function profile(container,row){
+ if(!row){el("p",L("客户端不可见","Hidden from clients"),container);return}
+ el("strong",row.company.name,container);container.append(window.publishedProfile(Object.fromEntries(row.fields.filter(k=>k in row.company).map(k=>[k,row.company[k]])),en));
+ for(const event of row.events)el("p",event.summary,container);
+}
+async function editPublication(){
+ const cid=$("pubCompany").value;if(!cid)return;
+ focusedCompany=cid;const s=await api("publication/"+cid);if(cid!==focusedCompany)return;
+ const root=$("pubEditor");root.replaceChildren();
+ const live=el("details",null,root);el("summary",L("当前已发布资料","Currently published profile"),live);
+ profile(live,s.live);el("h3",L("选择公开字段和动态","Select fields and events to publish"),root);
+ const checks=[],events=[];
+ function checkbox(text,value,on,group){const l=el("label",null,root),c=el("input",null,l);c.type="checkbox";c.checked=on;el("span"," "+text,l);group.push([c,value]);}
+ for(const k of s.available)if(s.company[k]!=null&&display(s.company[k])!=="")checkbox(nameOf(k)+" · "+fieldDisplay(k,s.company[k]),k,s.live?.fields.includes(k),checks);
+ for(const [id,event] of Object.entries(s.events))checkbox(event.summary,id,s.live?.events.some(e=>e.type===event.type&&e.url===event.url&&e.summary===event.summary),events);
+ async function stage(withdraw,restore=null){
+  const change={id:cid,draft:s.draft,revision:s.revision,withdraw,restore,fields:checks.filter(([c])=>c.checked).map(([,v])=>v),events:events.filter(([c])=>c.checked).map(([,v])=>v)};
+  const [row]=await api("publication/preview",{changes:[change]});
+  basket.set(cid,{change,row,before:s.live,name:s.company.name});renderBasket();
+ }
+ btn(root,L("预览并加入本次发布","Preview and add to batch"),()=>stage(false));
+ if(s.history.length>1){
+   const revisions=el("select",null,root);
+   for(const r of s.history.slice(1))el("option",r.created+" · #"+r.revision,revisions).value=r.revision;
+   btn(root,L("预览恢复此版本","Preview restoring this revision"),()=>stage(false,Number(revisions.value)));
+ }
+ if(s.live)btn(root,L("预览下架","Preview withdrawal"),()=>stage(true));
+}
+function renderBasket(){
+ const root=$("cart");root.replaceChildren();if(!basket.size)return;
+ el("h3",L("本次发布预览","Publication preview"),root);
+ for(const [id,item] of basket){
+  const box=el("article",null,root);el("h3",item.name,box);
+  const before=el("details",null,box);el("summary",L("发布前","Before publication"),before);profile(before,item.before);
+  el("strong",L("发布后","After publication"),box);profile(box,item.row);
+  btn(box,L("移出本次操作","Remove from batch"),()=>{basket.delete(id);renderBasket()});
+ }
+ btn(root,L("确认发布本次改动","Publish these changes"),async()=>{
+  await api("publication/apply",{changes:[...basket.values()].map(x=>x.change)});
+  basket.clear();await loadPublishing();status(L("已发布。刷新客户页面查看。","Published. Refresh the client to see the changes."));
+ });
+}
+checkConfig();
+translate();
+openView("extraction").then(()=>{
+  if(taskStorage.getItem(taskKey))return extractCurrent();
+}).catch(e=>status(e.message));
+api("candidates").then(rows=>{candidates=rows;renderCandidates()}).catch(e=>status(e.message));
+</script>
+</html>

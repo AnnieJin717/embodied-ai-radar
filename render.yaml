@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: embodied-radar-integrated
+    runtime: python
+    branch: feature/admin-client-publishing
+    plan: free
+    buildCommand: pip install -r requirements-integrated.txt
+    startCommand: uvicorn src.integrated:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.9
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: embodied-radar-course-db
+          property: connectionString
+      - key: OPENROUTER_MODEL
+        value: qwen/qwen3-30b-a3b-instruct-2507
+databases:
+  - name: embodied-radar-course-db
+    plan: free

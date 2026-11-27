@@ -62,11 +62,11 @@ def reference_router():
         limit: Annotated[int, Query(ge=1, le=30)] = 6,
     ):
         selected = [*(sectors or []), *([sector] if sector else [])]
-        return reference_page(request.app.state.service, q, selected, offset, limit)
+        return reference_page((getattr(request.state,"service",None) or request.app.state.service), q, selected, offset, limit)
 
     @router.get("/{company_id}")
     def reference_detail(request: Request, company_id: UUID):
-        repository = request.app.state.service.repository
+        repository = (getattr(request.state,"service",None) or request.app.state.service).repository
         company = repository.get(str(company_id))
         if company is None:
             raise HTTPException(404, detail="unknown_company")

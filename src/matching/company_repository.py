@@ -81,6 +81,7 @@ def detail(company, repository):
     rows = [FundingSummary.model_validate({k: event[k] for k in FundingSummary.model_fields})
             for event in repository.funding(cid)]
     return CompanyDetail(**summary(company, repository).model_dump(),
+                         published_fields=company.get("published_fields",{}),
                          website=company["website"] if safe_url(company["website"]) else None,
                          business_description=company["business_description"],
                          products=company["products"], technologies=company["technology_routes"],

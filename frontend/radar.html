@@ -7,7 +7,7 @@
   <title>具身项目雷达</title>
   <link rel="stylesheet" href="/demo-assets/radar.css?v=structure">
   <script type="module" src="/demo-assets/radar.js?v=structure"></script>
-</head>
+<script src="/demo-assets/published-profile.js"></script></head>
 <body>
 <header class="masthead">
   <div class="wrap bar">
@@ -99,7 +99,7 @@
     <section class="panel news-toolbar" aria-labelledby="news-run-title">
       <div><h2 id="news-run-title" data-i="collect">采集与提取</h2><p id="news-job" role="status"></p></div>
       <div class="actions"><a class="button" href="/api/v1/radar/events.csv" data-i="csv">下载事件表 CSV</a>
-        <button id="news-refresh" type="button" class="primary" data-i="refresh">更新 36氪新闻</button></div>
+        <button id="news-refresh" type="button" class="primary" data-i="refresh">刷新已发布动态</button></div>
     </section>
     <div id="news-metrics" class="metrics" aria-label="Batch metrics"></div>
     <section class="panel table-panel">

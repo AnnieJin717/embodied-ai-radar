@@ -24,7 +24,7 @@ from .taxonomy_service import key
 FRONTEND = ROOT / "frontend"
 
 
-def create_app(config=None, repository=None, *, radar_collect=collect):
+def create_app(config=None, repository=None, *, radar_collect=collect, integration=None):
     config = config if config is not None else {**dotenv_values(ROOT / ".env"), **os.environ}
 
     @asynccontextmanager
@@ -32,6 +32,10 @@ def create_app(config=None, repository=None, *, radar_collect=collect):
         path = Path(config.get("MATCH_DATA_DIR") or ROOT / "matching_data")
         if not path.is_absolute():
             path = ROOT / path
+        if integration:
+            integration.initialize()
+            yield
+            return
         app.state.service = MatchingService(repository if repository is not None else JsonCompanyRepository(path),
                                             config)
         yield
@@ -40,7 +44,9 @@ def create_app(config=None, repository=None, *, radar_collect=collect):
     news_path = Path(config.get("RADAR_NEWS_PATH") or ROOT / "news" / "36kr.json")
     if not news_path.is_absolute():
         news_path = ROOT / news_path
-    app.include_router(radar_router(news_path, collector=radar_collect))
+    if integration:
+        integration.mount(app)
+    app.include_router(radar_router(news_path, collector=radar_collect, published=integration))
     app.include_router(reference_router())
     origins = [s.strip() for s in (config.get("MATCH_CORS_ORIGINS") or
                                    "http://localhost:5173,http://127.0.0.1:5173").split(",") if s.strip()]
@@ -48,7 +54,7 @@ def create_app(config=None, repository=None, *, radar_collect=collect):
                        allow_methods=["GET", "POST"], allow_headers=["Content-Type"], allow_credentials=False)
 
     def service(request):
-        return request.app.state.service
+        return request.state.service if integration else request.app.state.service
 
     @app.get("/api/v1/health", response_model=HealthResponse)
     def health(request: Request):

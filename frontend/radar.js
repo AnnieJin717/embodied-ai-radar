@@ -10,7 +10,7 @@ const copy = {
     todayExample:"今天谁发布了新机器人？",recentExample:"最近有哪些原型展示？",latestExample:"查看最新采集批次",
     results:"匹配结果",reviewTitle:"待复核线索",reviewNote:"事件信息或日期尚不完整，按证据片段核对。",
     newsSub:"从 36氪官方文章 RSS 更新新闻，把可追溯的事件整理成表格。",
-    collect:"采集与提取",csv:"下载事件表 CSV",refresh:"更新 36氪新闻",table:"结构化记录",events:"事件表",
+    collect:"采集与提取",csv:"下载事件表 CSV",refresh:"刷新已发布动态",table:"结构化记录",events:"事件表",
     articles:"新闻候选",timeNote:"报道时间与事件时间分别记录。证据保留来源原文。",
     footer:"来源可查 · 原文证据 · 北京时间",
     freshness:"上次成功采集",noSnapshot:"暂无成功采集记录",loading:"正在读取数据…",loadError:"数据读取失败，请刷新页面重试。",
@@ -40,7 +40,7 @@ const copy = {
     todayExample:"Who launched a new robot today?",recentExample:"Show recent prototype demos",latestExample:"Show the latest batch",
     results:"Matching events",reviewTitle:"Needs review",reviewNote:"Some event details or dates remain unconfirmed. Check the source excerpt.",
     newsSub:"Refresh 36Kr's official article RSS and review the extracted events with source links.",
-    collect:"Collect and extract",csv:"Download Events CSV",refresh:"Refresh 36Kr News",table:"Structured records",events:"Events",
+    collect:"Collect and extract",csv:"Download Events CSV",refresh:"Refresh published updates",table:"Structured records",events:"Events",
     articles:"Candidate articles",timeNote:"Publication time and event time are tracked separately. Evidence stays in the source language.",
     footer:"Source links · Original evidence · Beijing time",
     freshness:"Last successful refresh",noSnapshot:"No successful refresh yet",loading:"Loading data…",loadError:"Couldn't load the data. Refresh the page to retry.",
@@ -307,6 +307,7 @@ async function refresh() {
     const job = await api("/refresh", {});
     model.jobState = job.retry_after ? "cooldown" : job.status;
     if (job.status === "running") await pollRefresh();
+    if (job.status === "succeeded") { await loadSnapshot(); if(model.answer) await search(); }
   } catch { model.jobState = "unavailable"; }
   finally { renderNews(); }
 }
