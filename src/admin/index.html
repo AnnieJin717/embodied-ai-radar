@@ -27,7 +27,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:black}.notice{min-height
 <label><span data-i="报道时间|Publication date"></span><input id="published" type="date"></label>
 <button id="fetchArticle" data-i="预览链接正文（无需模型）|Preview article text (no AI required)"></button><details><summary data-i="正文预览 / 手工补录（可选）|View or paste article text (optional)"></summary><textarea id="body"></textarea></details>
 <div class="controls"><button id="run" data-i="开始抽取|Extract"></button><button id="rules" data-i="规则预览|Preview rule-based extraction"></button></div>
-<button id="rss" data-i="更新 36 氪新闻|Refresh 36Kr feed"></button><div id="candidates"></div>
+<label><span data-i="按报道日期筛选已收录的 36 氪新闻（北京时间）|Filter saved 36Kr articles by publication date (Beijing time)"></span><input type="date" id="feedDate"></label><button id="rss" data-i="更新 36 氪新闻|Refresh 36Kr feed"></button><div id="candidates"></div>
 </section><section><h2 data-i="抽取结果|Extraction results"></h2><div id="result"></div></section></div>
 <section id="companyView" hidden><h2 data-i="公司库|Companies"></h2><input id="search" type="search">
 <details><summary data-i="选择公司列表显示字段|Choose company columns"></summary><div id="columns" class="controls"></div></details><div id="filters" class="controls filters"></div><div id="companyList" class="table"></div><div id="detail"></div></section>
@@ -263,8 +263,17 @@ function card(parent,data,subject,index,after){
   btn(actions,L("放弃","Discard"),()=>decide("discarded"));
   btn(actions,L("存为待复核","Save for review"),()=>decide("pending"));
 }
+let feedResults=null;
+function appendFeedResult(item){
+  const group=el("section",null,$("result"));el("h3",item.title,group);safeLink(group,item.url);
+  if(item.error)el("p",message(item.error),group);else renderArticle(group,item.data);
+}
 function renderResult(){
-  const root=$("result");root.replaceChildren();if(!latest)return;
+  if(feedResults){$("result").replaceChildren();feedResults.forEach(appendFeedResult);return}
+
+  const root=$("result");root.replaceChildren();if(!latest)return;renderArticle(root,latest);
+}
+function renderArticle(root,latest){
   if(latest.category==="unrelated")el("p",L("该新闻不属于网站范畴","Outside the radar scope"),root);
   if(latest.category==="partial")el("p",L("仅显示通用公司信息","Only general company fields are shown"),root).className="partial";
   if(latest.duplicate)el("p",L("该链接已处理过，当前为新版本","Previously processed. Showing the new revision."),root);
@@ -311,7 +320,7 @@ async function extractionAction(fn){
 }
 function extractCurrent(){
   return extractionAction(async()=>{
-    const input=payload();
+    feedResults=null;const input=payload();
     const urls=[...new Set(input.url.split(/\s+/).filter(Boolean))];
     if(taskStorage.getItem(taskKey)||urls.length<=1){
       latest=await followExtraction({...input,url:urls[0]||""});renderResult();status("");return;
@@ -333,15 +342,19 @@ function extractCurrent(){
   });
 }
 $("run").onclick=extractCurrent;
-$("rules").onclick=()=>work($("rules"),async()=>{latest=await api("rules",payload());renderResult();});
+$("rules").onclick=()=>work($("rules"),async()=>{feedResults=null;latest=await api("rules",payload());renderResult();});
 function renderCandidates(){
   const root=$("candidates");root.replaceChildren();const selected=[];
-  for(const row of candidates){
+  const day=$("feedDate").value;
+  const localDay=value=>value&&Number.isFinite(Date.parse(value))?new Date(Date.parse(value)+8*3600000).toISOString().slice(0,10):"";
+  const visible=candidates.filter(row=>!day||localDay(row.published_at)===day).sort((a,b)=>(b.published_at||"").localeCompare(a.published_at||""));
+  if(day&&!visible.length)el("p",L("该日暂无已收录的相关新闻。","No saved articles for this date."),root);
+  for(const row of visible){
     const label=el("label",null,root),check=el("input",null,label);check.type="checkbox";selected.push([check,row]);
     el("span"," "+row.title+" · "+(row.published_at||"")+" · "+(row.topic_focus==="primary"?L("主要报道对象","Main subject"):row.topic_focus==="mention"?L("文中提及","Mentioned in article"):(row.topic_focus||"")),label);
     btn(root,L("选用","Use"),()=>{$("url").value=row.url;$("published").value=(row.published_at||"").slice(0,10);$("body").value="";});
   }
-  if(candidates.length){
+  if(visible.length){
     const batch=el("button",L("抽取已选","Extract selected"),root);
     batch.onclick=()=>extractionAction(async()=>{
       if(taskStorage.getItem(taskKey)){
@@ -349,13 +362,14 @@ function renderCandidates(){
       }
       const rows=selected.filter(([check])=>check.checked).map(([,row])=>row);
       if(!rows.length)throw Error(L("请选择新闻","Select an article"));
-      const errors=[];
+      const errors=[];feedResults=[];latest=null;renderResult();
       let completed=0;
       for(const row of rows){
         try{
           latest=await followExtraction({url:row.url,published_at:row.published_at});
-          renderResult();completed++;
+          const item={title:row.title,url:row.url,data:latest};feedResults.push(item);appendFeedResult(item);completed++;
         }catch(e){
+          const item={title:row.title,url:row.url,error:e.message};feedResults.push(item);appendFeedResult(item);
           errors.push(row.title+": "+e.message);
           if(taskStorage.getItem(taskKey)||e.httpStatus===409)break;
         }
@@ -364,7 +378,8 @@ function renderCandidates(){
     });
   }
 }
-$("rss").onclick=()=>work($("rss"),async()=>{candidates=await api("feed",{});renderCandidates()});
+$("feedDate").onchange=renderCandidates;
+$("rss").onclick=()=>work($("rss"),async()=>{await api("feed",{});candidates=await api("candidates");renderCandidates()});
 function searchText(value){return display(value).toLowerCase()}
 function renderQueue(){
   const root=$("queue");root.replaceChildren();const query=$("queueSearch").value.trim().toLowerCase();
